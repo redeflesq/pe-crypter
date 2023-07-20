@@ -1,7 +1,8 @@
 # XORCrypter
 Simple XOR stub crypter for windows
 
-Crypter.c - Console application for crypt any EXE file
+Crypter.c - Console application for crypt any EXE32 file.
+
 Stub.c - WinApi application. Stub for crypter.
 
 # Before use
