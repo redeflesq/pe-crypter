@@ -2,22 +2,8 @@
 //#error No support
 #endif
 
-#ifdef WIN32
-#	define A86
-#else
-#	define A64
-#endif
-
 #include <Windows.h>
 #include <TlHelp32.h>
-
-#ifdef A86
-typedef DWORD DWORDT;
-typedef PDWORD PDWORDT;
-#else
-typedef DWORD64 DWORDT;
-typedef PDWORD64 PDWORDT;
-#endif
 
 #include "../common/common.h"
 

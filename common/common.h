@@ -1,5 +1,19 @@
 #include <Windows.h>
 
+#ifdef _WIN64
+#	define A64
+#else
+#	define A86
+#endif
+
+#ifdef A86
+typedef DWORD DWORDT;
+typedef PDWORD PDWORDT;
+#else
+typedef DWORD64 DWORDT;
+typedef PDWORD64 PDWORDT;
+#endif
+
 #define MALLOC(size) HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, size)
 #define MFREE(ptr) HeapFree(GetProcessHeap(), NULL, ptr)
 

@@ -1,5 +1,3 @@
-#include <time.h>
-
 #include "common.h"
 
 UINT FindSig(PUCHAR bin, UINT bin_size, PUCHAR find, UINT find_size, UINT count)

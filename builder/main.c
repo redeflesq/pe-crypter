@@ -3,6 +3,7 @@
 #include "../common/common.h"
 
 #include <stdio.h>
+#include <time.h>
 
 #define ASCII_START 32
 #define ASCII_END 126
@@ -12,11 +13,41 @@ static PUCHAR GenerateRandomString(UINT size)
 	srand(time(NULL) + size);
 	int i;
 	PUCHAR res = MALLOC(size + 1);
-	for (i = 0; i < size; i++) {
+	for (i = 0; i < size; i++)
 		res[i] = (char)(rand() % (ASCII_END - ASCII_START)) + ASCII_START;
-	}
 	res[i] = '\0';
 	return res;
+}
+
+static BOOL ValidatePE(LPVOID lpData)
+{
+	PIMAGE_DOS_HEADER lpImageDosHeader = (PIMAGE_DOS_HEADER)lpData;
+
+	if (lpImageDosHeader->e_magic != IMAGE_DOS_SIGNATURE) {
+		printf("Not found DOS signature\n");
+		return FALSE;
+	}
+
+	PIMAGE_NT_HEADERS lpImageNtHeaders = (PIMAGE_NT_HEADERS)((DWORDT)lpData + lpImageDosHeader->e_lfanew);
+
+	if (lpImageNtHeaders->Signature != IMAGE_NT_SIGNATURE) {
+		printf("Not found NT signature\n");
+		return FALSE;
+	}
+
+#ifdef A86
+	if (lpImageNtHeaders->FileHeader.Machine == IMAGE_FILE_MACHINE_AMD64) {
+		printf("x64 is not supported on this version\n");
+		return FALSE;
+	}
+#else
+	if (lpImageNtHeaders->FileHeader.Machine == IMAGE_FILE_MACHINE_I386) {
+		printf("x32 is not supported on this version\n");
+		return FALSE;
+	}
+#endif
+
+	return TRUE;
 }
 
 static int CryptFile(HANDLE hInputFile, HANDLE hStubFile, HANDLE hOutputFile)
@@ -32,12 +63,12 @@ static int CryptFile(HANDLE hInputFile, HANDLE hStubFile, HANDLE hOutputFile)
 	
 	DWORD iStubBytesReaded = 0;
 	if (!ReadFile(hStubFile, lpStubData, iStubSize, &iStubBytesReaded, NULL) || iStubBytesReaded != iStubSize) {
-		printf("[Stub] Unable to read stub file\n");
+		printf("Unable to read stub file\n");
 		MFREE(lpStubData);
-		return 0;
+		return -1;
 	}
 
-	printf("[Stub] File size: %d\n", iStubSize);
+	printf("Stub file size: %d\n", iStubSize);
 	
 	/* INSERT NEW ENCRYPTION KEY */
 	UCHAR sKey[64] = STUB_DEFAULT_KEY;
@@ -46,17 +77,17 @@ static int CryptFile(HANDLE hInputFile, HANDLE hStubFile, HANDLE hOutputFile)
 	{
 		UINT iKeyPos = FindSig(lpStubData, iStubSize, sKey, iKeyLength, 0);
 		if (!iKeyPos) {
-			printf("[Stub] Encryption key in stub not found\n");
+			printf("Encryption key in stub not found\n");
 			MFREE(lpStubData);
-			return 0;
+			return -1;
 		}
 
-		printf("[Stub] Encryption key position start: %d\n", iKeyPos);
-		printf("[Stub] Encryption key position end: %d\n", iKeyPos + iKeyLength);
+		printf("Encryption key position in stub start: %d\n", iKeyPos);
+		printf("Encryption key position in stub end: %d\n", iKeyPos + iKeyLength);
 
 		sNewKey = GenerateRandomString(iKeyLength);
 
-		printf("[Stub] Insert new key: '%s'\n", sNewKey);
+		printf("Insert new key into stub: '%s'\n", sNewKey);
 
 		// replace default key
 		for (UINT i = 0; i < iKeyLength; i++)
@@ -70,17 +101,17 @@ static int CryptFile(HANDLE hInputFile, HANDLE hStubFile, HANDLE hOutputFile)
 	{
 		int iSeparatorPos = FindSig(lpStubData, iStubSize, sSeparator, iSeparatorLength, 0);
 		if (!iSeparatorPos) {
-			printf("[Stub] Separator in stub not found\n");
+			printf("Separator in stub not found\n");
 			MFREE(lpStubData);
-			return 0;
+			return -1;
 		}
 
-		printf("[Stub] Separator position start: %d\n", iSeparatorPos);
-		printf("[Stub] Separator position end: %d\n", iSeparatorPos + iSeparatorLength);
+		printf("Separator position in stub start: %d\n", iSeparatorPos);
+		printf("Separator position in stub end: %d\n", iSeparatorPos + iSeparatorLength);
 
 		sNewSeparator = GenerateRandomString(iSeparatorLength);
 
-		printf("[Stub] Insert new separator: '%s'\n", sNewSeparator);
+		printf("Insert new separator into stub: '%s'\n", sNewSeparator);
 
 		// replace default separator
 		for (int i = 0; i < iSeparatorLength; i++)
@@ -94,21 +125,26 @@ static int CryptFile(HANDLE hInputFile, HANDLE hStubFile, HANDLE hOutputFile)
 	}
 
 	DWORD iInputSize = size.QuadPart;
-	PUCHAR lpInputData = malloc(iInputSize * sizeof(UCHAR));
+	PUCHAR lpInputData = MALLOC(iInputSize * sizeof(UCHAR));
 	if (!lpInputData) {
 		MFREE(lpStubData);
 		return -1;
 	}
 
 	DWORD iInputBytesReaded = 0;
-	if (!ReadFile(hInputFile, lpInputData, iInputSize, &iInputBytesReaded, NULL) || iInputBytesReaded != iInputSize) {
-		printf("[Stub] Unable to read stub file\n");
+	if (!ReadFile(hInputFile, lpInputData, iInputSize, &iInputBytesReaded, NULL) || 
+		iInputBytesReaded != iInputSize ||
+		!ValidatePE(lpInputData)
+		) {
+		printf("Unable to read input file\n");
 		MFREE(lpStubData);
 		MFREE(lpInputData);
-		return 0;
+		return -1;
 	}
 
 	XORBinary(lpInputData, iInputSize, sNewKey, iKeyLength);
+
+	MFREE(sNewKey);
 
 	printf("Input file size: %dB\n", iInputSize);
 
@@ -120,25 +156,26 @@ static int CryptFile(HANDLE hInputFile, HANDLE hStubFile, HANDLE hOutputFile)
 	for (i = 0; i < iStubSize; i++)
 		*(lpOutputData + j++) = *(lpStubData + i);
 
+	MFREE(lpStubData);
+
 	for (i = 0; i < iSeparatorLength; i++)
 		*(lpOutputData + j++) = *(sNewSeparator + i);
 
+	MFREE(sNewSeparator);
+
 	for (i = 0; i < iInputSize; i++)
 		*(lpOutputData + j++) = *(lpInputData + i);
+
+	MFREE(lpInputData);
 	
-	printf("Total write bytes: %dB\n", j);
+	printf("Total write bytes (stub & separator & input): %dB\n", j);
 
 	DWORD dwOutputDataWritten = 0;
 	WriteFile(hOutputFile, lpOutputData, iOutputSize, &dwOutputDataWritten, NULL);
 
-	printf("Output file size: %dB\n", iOutputSize);
-	printf("Output file bytes written: %dB", dwOutputDataWritten);
-
-	MFREE(lpStubData);
-	MFREE(lpInputData);
 	MFREE(lpOutputData);
-	MFREE(sNewKey);
-	MFREE(sNewSeparator);
+
+	printf("Output file size: %dB\n", iOutputSize);
 
 	return 0;
 }
@@ -263,6 +300,9 @@ int main(int argc, char* argv[])
 	CloseHandle(hOutputFile);
 	CloseHandle(hStubFile);
 	CloseHandle(hInputFile);
+
+	if (ret < 0)
+		DeleteFileA(sOutputFullpath);
 
 	return ret;
 }
