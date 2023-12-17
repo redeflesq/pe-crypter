@@ -1,4 +1,9 @@
+#define _CRT_SECURE_NO_WARNINGS
+
 #include <Windows.h>
+
+#include "../common/lz4/lz4.h"
+#include "../common/lz4/lz4hc.h"
 
 #ifdef _WIN64
 #	define A64

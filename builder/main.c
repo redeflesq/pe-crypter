@@ -1,11 +1,7 @@
-#define _CRT_SECURE_NO_WARNINGS
-
 #include "../common/common.h"
 
 #include <stdio.h>
 #include <time.h>
-
-#include "../common/lz4/lz4hc.h"
 
 #define ASCII_START 32
 #define ASCII_END 126

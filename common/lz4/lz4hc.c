@@ -45,7 +45,7 @@
  *  Since workspace is rather large, heap mode is recommended.
 **/
 #ifndef LZ4HC_HEAPMODE
-#  define LZ4HC_HEAPMODE 1
+#  define LZ4HC_HEAPMODE 0
 #endif
 
 
